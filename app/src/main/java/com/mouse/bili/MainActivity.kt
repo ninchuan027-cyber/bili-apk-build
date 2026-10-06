@@ -52,7 +52,7 @@ class MainActivity : Activity() {
 
     private val killerJs = """
         (function(){
-          var KEYS = ['广告�s蔽', '插件白名单', '广告拦截'];
+          var KEYS = ['广告屏蔽', '插件白名单', '广告拦截'];
           var timer = null, removed = 0, closedCount = 0, log = [];
           function say(m){ try { BiliBridge.log(m); } catch(e){} }
 
@@ -112,9 +112,33 @@ class MainActivity : Activity() {
                 if (m) { var parts = m[1].split(','); a = parts.length > 3 ? parseFloat(parts[3]) : 1; }
                 if (a > 0.05) { log.push('遮罩:' + desc(e)); e.remove(); removed++; }
               }
+              else if (p === 'fixed' && covers(e) && e.children.length === 0 && (e.tagName === 'DIV' || e.tagName === 'SPAN') && !(e.textContent || '').trim()) {
+                log.push('空层:' + desc(e)); e.remove(); removed++;
+              }
             }
             document.documentElement.style.setProperty('overflow', 'auto', 'important');
             document.body.style.setProperty('overflow', 'auto', 'important');
+          }
+
+          function killBoxes(){
+            var imgs = document.body.querySelectorAll('img'), seen = [], did = false;
+            for (var i = 0; i < imgs.length; i++) {
+              var c = imgs[i], fx = null, ab = null;
+              while (c && c !== document.body && c !== document.documentElement) {
+                var pp = pos(c);
+                if (pp === 'fixed') fx = c;
+                else if (pp === 'absolute') ab = c;
+                c = c.parentElement;
+              }
+              fx = fx || ab;
+              if (!fx || seen.indexOf(fx) >= 0) continue;
+              seen.push(fx);
+              if ((fx.textContent || '').trim().length >= 30) continue;
+              var r = fx.getBoundingClientRect();
+              var boxLike = r.width >= innerWidth * 0.75 && r.height >= innerHeight * 0.15 && r.height <= innerHeight * 0.6;
+              if (boxLike || covers(fx)) { log.push('白框:' + desc(fx)); fx.remove(); removed++; did = true; }
+            }
+            return did;
           }
 
           function scan(root, topHost, st){
@@ -152,6 +176,7 @@ class MainActivity : Activity() {
                 box.remove(); removed++; did = true;
               }
             });
+            if (killBoxes()) did = true;
             if (did) { killMasks(); setTimeout(killMasks, 300); }
           }
           function schedule(){ if (!timer) timer = setTimeout(sweep, 200); }
@@ -163,7 +188,7 @@ class MainActivity : Activity() {
 
           if (window === window.top) setTimeout(function(){
             var st = stats();
-            say('v8诊断 命中=' + st.hits.length + ' closed=' + closedCount + ' iframe=' + st.iframes + ' 已删=' + removed);
+            say('v9诊断 命中=' + st.hits.length + ' closed=' + closedCount + ' iframe=' + st.iframes + ' 已删=' + removed);
             setTimeout(function(){ say('删除记录=' + (log.join(' | ') || '无')); }, 3800);
           }, 5000);
         })();
@@ -185,7 +210,7 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
 
         WebView.setWebContentsDebuggingEnabled(true)
-        android.widget.Toast.makeText(this, "Bili v8（带诊断）", android.widget.Toast.LENGTH_LONG).show()
+        android.widget.Toast.makeText(this, "Bili v9（带诊断）", android.widget.Toast.LENGTH_LONG).show()
         web = WebView(this)
         web.addJavascriptInterface(BiliBridge(this), "BiliBridge")
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
