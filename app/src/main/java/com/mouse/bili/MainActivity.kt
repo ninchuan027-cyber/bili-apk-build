@@ -90,7 +90,7 @@ class MainActivity : Activity() {
             var els = root.querySelectorAll('*');
             for (var i = 0; i < els.length; i++) {
               var e = els[i], t = e.textContent;
-              if (t && t.length < 300 && hasKey(t)) {
+              if (t && t.length < 300 && (hasKey(t) || t.trim() === '允许')) {
                 if (topHost) { if (st.shadow.indexOf(topHost) < 0) st.shadow.push(topHost); }
                 else st.hits.push(e);
               }
@@ -140,11 +140,14 @@ class MainActivity : Activity() {
             return e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (c ? '.' + c : '') + '[' + pos(e).charAt(0) + ']';
           }
           if (window === window.top) setTimeout(function(){
-            var st = stats(), chain = [];
-            var e = document.elementFromPoint(innerWidth / 2, innerHeight * 0.64);
-            for (var i = 0; e && i < 5; i++) { chain.push(desc(e)); e = e.parentElement; }
-            say('v6诊断 命中=' + st.hits.length + ' shadow=' + st.shadow.length + ' closed=' + closedCount +
-                ' iframe=' + st.iframes + ' 已删=' + removed + ' 按钮处=' + chain.join('<'));
+            var st = stats();
+            say('v7诊断 命中=' + st.hits.length + ' shadow=' + st.shadow.length + ' closed=' + closedCount +
+                ' iframe=' + st.iframes + ' 已删=' + removed);
+            var btn = null, all = document.querySelectorAll('*');
+            for (var k = 0; k < all.length; k++) { if ((all[k].textContent || '').trim() === '允许' && all[k].children.length === 0) { btn = all[k]; break; } }
+            var e = btn || document.elementFromPoint(innerWidth / 2, innerHeight * 0.64), chain = [];
+            for (var i = 0; e && i < 6; i++) { chain.push(desc(e)); e = e.parentElement; }
+            setTimeout(function(){ say((btn ? '允许按钮链=' : '按钮处=') + chain.join('<')); }, 3800);
           }, 5000);
         })();
     """.trimIndent()
@@ -165,7 +168,7 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
 
         WebView.setWebContentsDebuggingEnabled(true)
-        android.widget.Toast.makeText(this, "Bili v6（带诊断）", android.widget.Toast.LENGTH_LONG).show()
+        android.widget.Toast.makeText(this, "Bili v7（带诊断）", android.widget.Toast.LENGTH_LONG).show()
         web = WebView(this)
         web.addJavascriptInterface(BiliBridge(this), "BiliBridge")
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
