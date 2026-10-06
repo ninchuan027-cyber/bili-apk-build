@@ -56,9 +56,28 @@ class MainActivity : Activity() {
           var KEYS = ['广告屏蔽', '插件白名单', '广告拦截'];
           var timer = null;
           function hasKey(t){ for (var i = 0; i < KEYS.length; i++) if (t.indexOf(KEYS[i]) > -1) return true; return false; }
+          function pos(e){ return getComputedStyle(e).position; }
+          function small(e){ return (e.textContent || '').length < 600; }
           function covers(e){
             var r = e.getBoundingClientRect();
             return r.width >= innerWidth * 0.9 && r.height >= innerHeight * 0.9;
+          }
+          // 找弹窗根节点：不依赖具体 class 名，只看"文字很少的最外层祖先"，文字多的是正文，绝不动
+          function pickBox(el){
+            var c = el, chain = [];
+            while (c && c !== document.body && c !== document.documentElement && small(c)) { chain.push(c); c = c.parentElement; }
+            if (!chain.length) return null;
+            var fixedBox = null, absBox = null;
+            chain.forEach(function(x){
+              var p = pos(x);
+              if (p === 'fixed') fixedBox = x;
+              else if (p === 'absolute') absBox = x;
+            });
+            if (fixedBox) return fixedBox;
+            if (absBox) return absBox;
+            var top = chain[chain.length - 1];
+            if (top.parentElement === document.body) return top;
+            return chain[Math.min(3, chain.length - 1)];
           }
           function sweep(){
             timer = null;
@@ -67,29 +86,25 @@ class MainActivity : Activity() {
             while ((n = w.nextNode())) {
               if (n.nodeValue.length < 200 && hasKey(n.nodeValue) && n.parentElement) hits.push(n.parentElement);
             }
+            if (!hits.length) return;
             hits.forEach(function(el){
-              var c = el, box = null;
-              while (c && c !== document.body && c !== document.documentElement) {
-                if (getComputedStyle(c).position === 'fixed') box = c;   // 取最外层的固定定位容器
-                c = c.parentElement;
-              }
-               if (!box) return;                                          // 没有固定层就不动，避免误删正文
-              var par = box.parentElement;
-              if (par) {
-                Array.prototype.forEach.call(par.children, function(sib){
-                  if (sib !== box && getComputedStyle(sib).position === 'fixed' && covers(sib)) sib.remove();  // 遮罩
-                });
-              }
-              box.remove();
-              document.documentElement.style.setProperty('overflow', 'auto', 'important');
-              document.body.style.setProperty('overflow', 'auto', 'important');
+              var box = pickBox(el);
+              if (box && box.isConnected) box.remove();
             });
+            // 清掉遮罩：几乎没有文字、铺满屏幕的固定/绝对定位层
+            Array.prototype.forEach.call(document.body.children, function(e){
+              var p = pos(e);
+              if ((p === 'fixed' || p === 'absolute') && covers(e) && (e.textContent || '').trim().length < 20) e.remove();
+            });
+            document.documentElement.style.setProperty('overflow', 'auto', 'important');
+            document.body.style.setProperty('overflow', 'auto', 'important');
           }
-          function schedule(){ if (!timer) timer = setTimeout(sweep, 400); }
+          function schedule(){ if (!timer) timer = setTimeout(sweep, 200); }
           document.addEventListener('DOMContentLoaded', function(){
-            new MutationObserver(schedule).observe(document.documentElement, {childList: true, subtree: true});
+            new MutationObserver(schedule).observe(document.documentElement, {childList: true, subtree: true, characterData: true});
             schedule();
           });
+          setInterval(sweep, 1000);   // 兜底：每秒检查一次
         })();
     """.trimIndent()
 
@@ -109,6 +124,7 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
 
         WebView.setWebContentsDebuggingEnabled(true) // 调试用：电脑 Chrome 打开 chrome://inspect 可检查本应用网页
+        android.widget.Toast.makeText(this, "Bili v4（弹窗清除已启用）", android.widget.Toast.LENGTH_LONG).show()
         web = WebView(this)
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
         web.settings.apply {
