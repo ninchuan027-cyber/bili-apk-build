@@ -33,7 +33,8 @@ class MainActivity : Activity() {
         "outbrain.com", "popads.net", "propellerads.com", "exoclick.com",
         "hm.baidu.com", "cpro.baidu.com", "pos.baidu.com", "union.baidu.com",
         "cnzz.com", "umeng.com", "tanx.com", "alimama.com", "gdt.qq.com",
-        "e.qq.com", "csjplatform.com", "pangolin-sdk-toutiao.com"
+        "e.qq.com", "csjplatform.com", "pangolin-sdk-toutiao.com",
+        "fundingchoicesmessages.google.com", "fundingchoices.google.com", "adtrafficquality.google"
     )
 
     private val baseJs = """
@@ -48,10 +49,17 @@ class MainActivity : Activity() {
           var css = 'ins.adsbygoogle,iframe[src*="doubleclick"],iframe[src*="googlesyndication"],' +
             '[id^="google_ads"],[id^="div-gpt-ad"],[id*="BAIDU_"],[id^="cpro"]' +
             '{opacity:0!important;pointer-events:none!important}';
-          document.addEventListener('DOMContentLoaded', function(){
-            var s = document.createElement('style'); s.textContent = css;
-            document.documentElement.appendChild(s);
-          });
+          css += '.fc-ab-root,.fc-dialog-container,.fc-dialog-overlay,.fc-consent-root,.fc-dialog{display:none!important}';
+          try {
+            var sheet = new CSSStyleSheet();
+            sheet.replaceSync(css);
+            document.adoptedStyleSheets = (document.adoptedStyleSheets || []).concat([sheet]);
+          } catch(e) {
+            document.addEventListener('DOMContentLoaded', function(){
+              var s = document.createElement('style'); s.textContent = css;
+              document.documentElement.appendChild(s);
+            });
+          }
         })();
     """.trimIndent()
 
@@ -231,7 +239,7 @@ class MainActivity : Activity() {
 
           if (window === window.top) setTimeout(function(){
             var st = stats();
-            say('v11诊断 命中=' + st.hits.length + ' closed=' + closedCount + ' iframe=' + st.iframes + ' 已删=' + removed);
+            say('v12诊断 命中=' + st.hits.length + ' closed=' + closedCount + ' iframe=' + st.iframes + ' 已删=' + removed);
             setTimeout(function(){
               try { BiliBridge.dialog('删除记录（' + log.length + '条）：\n' + (log.join('\n') || '无')); } catch(e){}
             }, 2500);
@@ -255,7 +263,7 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
 
         WebView.setWebContentsDebuggingEnabled(true)
-        android.widget.Toast.makeText(this, "Bili v11（带诊断）", android.widget.Toast.LENGTH_LONG).show()
+        android.widget.Toast.makeText(this, "Bili v12（带诊断）", android.widget.Toast.LENGTH_LONG).show()
         web = WebView(this)
         web.addJavascriptInterface(BiliBridge(this), "BiliBridge")
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
