@@ -15,6 +15,11 @@ import java.net.URL
 class BiliBridge(private val act: Activity) {
     @android.webkit.JavascriptInterface
     fun log(m: String) { act.runOnUiThread { android.widget.Toast.makeText(act, m, android.widget.Toast.LENGTH_LONG).show() } }
+
+    @android.webkit.JavascriptInterface
+    fun dialog(m: String) {
+        act.runOnUiThread { android.app.AlertDialog.Builder(act).setMessage(m).setPositiveButton("好", null).show() }
+    }
 }
 
 class MainActivity : Activity() {
@@ -185,7 +190,12 @@ class MainActivity : Activity() {
             try {
               if (!document.body) return;
               var smalls = [];
-              for (var i = 0; i < recs.length; i++) {
+              for (var i = 0; i < recs.length && smalls.length < 40; i++) {
+                if (recs[i].type === 'attributes') {
+                  var tg = recs[i].target;
+                  if (tg && tg.nodeType === 1 && (tg.textContent || '').length < 300 && smalls.indexOf(tg) < 0) smalls.push(tg);
+                  continue;
+                }
                 var nodes = recs[i].addedNodes;
                 for (var j = 0; j < nodes.length; j++) {
                   var n = nodes[j];
@@ -213,7 +223,7 @@ class MainActivity : Activity() {
           function startObs(){
             if (obs || !document.documentElement) return;
             obs = new MutationObserver(function(recs){ quick(recs); schedule(); });
-            obs.observe(document.documentElement, {childList: true, subtree: true, characterData: true});
+            obs.observe(document.documentElement, {childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class', 'style', 'hidden']});
           }
           startObs();
           document.addEventListener('DOMContentLoaded', function(){ startObs(); schedule(); });
@@ -221,8 +231,10 @@ class MainActivity : Activity() {
 
           if (window === window.top) setTimeout(function(){
             var st = stats();
-            say('v10诊断 命中=' + st.hits.length + ' closed=' + closedCount + ' iframe=' + st.iframes + ' 已删=' + removed);
-            setTimeout(function(){ say('删除记录=' + (log.join(' | ') || '无')); }, 3800);
+            say('v11诊断 命中=' + st.hits.length + ' closed=' + closedCount + ' iframe=' + st.iframes + ' 已删=' + removed);
+            setTimeout(function(){
+              try { BiliBridge.dialog('删除记录（' + log.length + '条）：\n' + (log.join('\n') || '无')); } catch(e){}
+            }, 2500);
           }, 5000);
         })();
     """.trimIndent()
@@ -243,7 +255,7 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
 
         WebView.setWebContentsDebuggingEnabled(true)
-        android.widget.Toast.makeText(this, "Bili v10（带诊断）", android.widget.Toast.LENGTH_LONG).show()
+        android.widget.Toast.makeText(this, "Bili v11（带诊断）", android.widget.Toast.LENGTH_LONG).show()
         web = WebView(this)
         web.addJavascriptInterface(BiliBridge(this), "BiliBridge")
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
