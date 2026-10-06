@@ -180,15 +180,48 @@ class MainActivity : Activity() {
             if (did) { killMasks(); setTimeout(killMasks, 300); }
           }
           function schedule(){ if (!timer) timer = setTimeout(sweep, 200); }
-          document.addEventListener('DOMContentLoaded', function(){
-            new MutationObserver(schedule).observe(document.documentElement, {childList: true, subtree: true, characterData: true});
-            schedule();
-          });
+
+          function quick(recs){
+            try {
+              if (!document.body) return;
+              var smalls = [];
+              for (var i = 0; i < recs.length; i++) {
+                var nodes = recs[i].addedNodes;
+                for (var j = 0; j < nodes.length; j++) {
+                  var n = nodes[j];
+                  if (n.nodeType === 1 && (n.textContent || '').length < 300) smalls.push(n);
+                }
+              }
+              if (!smalls.length) return;
+              var did = false;
+              smalls.forEach(function(n){
+                if (!n.isConnected) return;
+                var cand = [n].concat(Array.prototype.slice.call(n.querySelectorAll('*')));
+                for (var k = 0; k < cand.length; k++) {
+                  var t = cand[k].textContent || '';
+                  if (cand[k].isConnected && (hasKey(t) || t.trim() === '允许')) {
+                    var box = pickBox(cand[k]);
+                    if (box && box.isConnected) { log.push('即时:' + desc(cand[k]) + '>' + desc(box)); box.remove(); removed++; did = true; }
+                  }
+                }
+              });
+              if (killBoxes()) did = true;
+              if (did) { killMasks(); setTimeout(killMasks, 300); }
+            } catch(e){}
+          }
+          var obs = null;
+          function startObs(){
+            if (obs || !document.documentElement) return;
+            obs = new MutationObserver(function(recs){ quick(recs); schedule(); });
+            obs.observe(document.documentElement, {childList: true, subtree: true, characterData: true});
+          }
+          startObs();
+          document.addEventListener('DOMContentLoaded', function(){ startObs(); schedule(); });
           setInterval(sweep, 1000);
 
           if (window === window.top) setTimeout(function(){
             var st = stats();
-            say('v9诊断 命中=' + st.hits.length + ' closed=' + closedCount + ' iframe=' + st.iframes + ' 已删=' + removed);
+            say('v10诊断 命中=' + st.hits.length + ' closed=' + closedCount + ' iframe=' + st.iframes + ' 已删=' + removed);
             setTimeout(function(){ say('删除记录=' + (log.join(' | ') || '无')); }, 3800);
           }, 5000);
         })();
@@ -210,7 +243,7 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
 
         WebView.setWebContentsDebuggingEnabled(true)
-        android.widget.Toast.makeText(this, "Bili v9（带诊断）", android.widget.Toast.LENGTH_LONG).show()
+        android.widget.Toast.makeText(this, "Bili v10（带诊断）", android.widget.Toast.LENGTH_LONG).show()
         web = WebView(this)
         web.addJavascriptInterface(BiliBridge(this), "BiliBridge")
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
