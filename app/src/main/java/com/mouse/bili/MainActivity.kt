@@ -12,6 +12,11 @@ import androidx.webkit.WebViewFeature
 import java.io.ByteArrayInputStream
 import java.net.URL
 
+class BiliBridge(private val act: Activity) {
+    @android.webkit.JavascriptInterface
+    fun log(m: String) { act.runOnUiThread { android.widget.Toast.makeText(act, m, android.widget.Toast.LENGTH_LONG).show() } }
+}
+
 class MainActivity : Activity() {
     private val home = "https://www.bilinovel.com/"
     private val chromeUa = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 " +
@@ -54,7 +59,8 @@ class MainActivity : Activity() {
     private val killerJs = """
         (function(){
           var KEYS = ['广告屏蔽', '插件白名单', '广告拦截'];
-          var timer = null;
+          var timer = null, removed = 0;
+          function say(m){ try { BiliBridge.log(m); } catch(y){} }
           function hasKey(t){ for (var i = 0; i < KEYS.length; i++) if (t.indexOf(KEYS[i]) > -1) return true; return false; }
           function pos(e){ return getComputedStyle(e).position; }
           function small(e){ return (e.textContent || '').length < 600; }
@@ -62,7 +68,6 @@ class MainActivity : Activity() {
             var r = e.getBoundingClientRect();
             return r.width >= innerWidth * 0.9 && r.height >= innerHeight * 0.9;
           }
-          // 找弹窗根节点：不依赖具体 class 名，只看"文字很少的最外层祖先"，文字多的是正文，绝不动
           function pickBox(el){
             var c = el, chain = [];
             while (c && c !== document.body && c !== document.documentElement && small(c)) { chain.push(c); c = c.parentElement; }
@@ -70,8 +75,7 @@ class MainActivity : Activity() {
             var fixedBox = null, absBox = null;
             chain.forEach(function(x){
               var p = pos(x);
-              if (p === 'fixed') fixedBox = x;
-              else if (p === 'absolute') absBox = x;
+              if (p === 'fixed') fixedBox = x; else if (p === 'absolute') absBox = x;
             });
             if (fixedBox) return fixedBox;
             if (absBox) return absBox;
@@ -79,32 +83,55 @@ class MainActivity : Activity() {
             if (top.parentElement === document.body) return top;
             return chain[Math.min(3, chain.length - 1)];
           }
+          function stats(){
+            var st = {hits: [], shadow: [], iframes: 0, iframeHit: 0};
+            if (!document.body) return st;
+            var els = document.body.querySelectorAll('*');
+            for (var i = 0; i < els.length; i++) {
+              var e = els[i], t = e.textContent;
+              if (t && t.length < 300 && hasKey(t)) st.hits.push(e);          // 按元素文字匹配，文字被拆成多段也能命中
+              if (e.shadowRoot && hasKey(e.shadowRoot.textContent || '')) st.shadow.push(e);
+              if (e.tagName === 'IFRAME') {
+                st.iframes++;
+                try {
+                  var d = e.contentDocument;
+                  if (d && d.body && hasKey(d.body.textContent || '')) { st.iframeHit++; e.remove(); removed++; }
+                } catch(x){}
+              }
+            }
+            return st;
+          }
           function sweep(){
             timer = null;
             if (!document.body) return;
-            var w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null), n, hits = [];
-            while ((n = w.nextNode())) {
-              if (n.nodeValue.length < 200 && hasKey(n.nodeValue) && n.parentElement) hits.push(n.parentElement);
-            }
-            if (!hits.length) return;
-            hits.forEach(function(el){
+            var st = stats();
+            st.hits.concat(st.shadow).forEach(function(el){
+              if (!el.isConnected) return;
               var box = pickBox(el);
-              if (box && box.isConnected) box.remove();
+              if (box && box.isConnected) { box.remove(); removed++; }
             });
-            // 清掉遮罩：几乎没有文字、铺满屏幕的固定/绝对定位层
-            Array.prototype.forEach.call(document.body.children, function(e){
-              var p = pos(e);
-              if ((p === 'fixed' || p === 'absolute') && covers(e) && (e.textContent || '').trim().length < 20) e.remove();
-            });
-            document.documentElement.style.setProperty('overflow', 'auto', 'important');
-            document.body.style.setProperty('overflow', 'auto', 'important');
+            if (removed > 0) {
+              Array.prototype.forEach.call(document.body.children, function(e){
+                var p = pos(e);
+                if ((p === 'fixed' || p === 'absolute') && covers(e) && (e.textContent || '').trim().length < 20) e.remove();
+              });
+              document.documentElement.style.setProperty('overflow', 'auto', 'important');
+              document.body.style.setProperty('overflow', 'auto', 'important');
+            }
           }
           function schedule(){ if (!timer) timer = setTimeout(sweep, 200); }
           document.addEventListener('DOMContentLoaded', function(){
             new MutationObserver(schedule).observe(document.documentElement, {childList: true, subtree: true, characterData: true});
             schedule();
           });
-          setInterval(sweep, 1000);   // 兜底：每秒检查一次
+          setInterval(sweep, 1000);
+          // 诊断：5 秒后在屏幕下方提示一次，方便判断弹窗到底藏在哪
+          if (window === window.top) setTimeout(function(){
+            var st = stats();
+            var inHtml = document.documentElement.outerHTML.indexOf('广告屏蔽') > -1;
+            say('v5诊断 源码含关键词=' + (inHtml ? '是' : '否') + ' 元素命中=' + st.hits.length +
+                ' shadow=' + st.shadow.length + ' iframe=' + st.iframes + ' 已删=' + removed);
+          }, 5000);
         })();
     """.trimIndent()
 
@@ -124,8 +151,9 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
 
         WebView.setWebContentsDebuggingEnabled(true) // 调试用：电脑 Chrome 打开 chrome://inspect 可检查本应用网页
-        android.widget.Toast.makeText(this, "Bili v4（弹窗清除已启用）", android.widget.Toast.LENGTH_LONG).show()
+        android.widget.Toast.makeText(this, "Bili v5（带诊断）", android.widget.Toast.LENGTH_LONG).show()
         web = WebView(this)
+        web.addJavascriptInterface(BiliBridge(this), "BiliBridge")
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
         web.settings.apply {
             javaScriptEnabled = true; domStorageEnabled = true
