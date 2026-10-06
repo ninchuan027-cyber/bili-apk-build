@@ -156,6 +156,15 @@ class MainActivity : Activity() {
           }
           function schedule(){ if (!timer) timer = setTimeout(sweep, 400); }
 
+          function unlock(){
+            [document.documentElement, document.body].forEach(function(e){
+              if (!e) return;
+              var cs = getComputedStyle(e);
+              if (cs.overflowY === 'hidden' || cs.overflowY === 'clip') e.style.setProperty('overflow', 'auto', 'important');
+              if (cs.touchAction === 'none') e.style.setProperty('touch-action', 'auto', 'important');
+            });
+          }
+          setInterval(unlock, 500);
           var obs = null;
           function startObs(){
             if (obs || !document.documentElement) return;
