@@ -223,7 +223,21 @@ class MainActivity : Activity() {
         }
 
         setContentView(FrameLayout(this).apply { addView(web, FrameLayout.LayoutParams(-1, -1)) })
-        web.loadUrl(home)
+        val lastUrl = getSharedPreferences("bili", MODE_PRIVATE).getString("last_url", null)
+        web.loadUrl(if (lastUrl != null && isSiteUrl(lastUrl)) lastUrl else home)
+    }
+
+    private fun isSiteUrl(u: String): Boolean = try {
+        val h = URL(u).host
+        h.endsWith("bilinovel.com") || h.endsWith("linovelib.com")
+    } catch (e: Exception) { false }
+
+    override fun onPause() {
+        super.onPause()
+        val u = web.url
+        if (u != null && isSiteUrl(u)) {
+            getSharedPreferences("bili", MODE_PRIVATE).edit().putString("last_url", u).apply()
+        }
     }
 
     @Deprecated("Deprecated in Java")
