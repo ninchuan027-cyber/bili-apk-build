@@ -235,11 +235,20 @@ class MainActivity : Activity() {
     override fun onPause() {
         super.onPause()
         val u = web.url
-        if (u != null && isSiteUrl(u)) {
+        if (u != null && isSiteUrl(u) && !u.contains("search")) {
             getSharedPreferences("bili", MODE_PRIVATE).edit().putString("last_url", u).apply()
         }
     }
 
+    private fun isHomeUrl(u: String?): Boolean =
+        u != null && u.trimEnd('/') == home.trimEnd('/')
+
     @Deprecated("Deprecated in Java")
-    override fun onBackPressed() { if (web.canGoBack()) web.goBack() else super.onBackPressed() }
+    override fun onBackPressed() {
+        when {
+            web.canGoBack() -> web.goBack()
+            !isHomeUrl(web.url) -> web.loadUrl(home)
+            else -> super.onBackPressed()
+        }
+    }
 }
