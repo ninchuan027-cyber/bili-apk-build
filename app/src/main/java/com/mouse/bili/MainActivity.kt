@@ -55,107 +55,6 @@ class MainActivity : Activity() {
 
     private val killerJs = """
         (function(){
-          var KEYS = ['广告屏蔽', '插件白名单', '广告拦截'];
-          var timer = null;
-
-          try {
-            var origAttach = Element.prototype.attachShadow;
-            Element.prototype.attachShadow = function(init){
-              return origAttach.call(this, Object.assign({}, init || {}, {mode: 'open'}));
-            };
-          } catch(e){}
-
-          function hasKey(t){ for (var i = 0; i < KEYS.length; i++) if (t.indexOf(KEYS[i]) > -1) return true; return false; }
-          function pos(e){ return getComputedStyle(e).position; }
-          function small(e){ return (e.textContent || '').length < 600; }
-          function covers(e){
-            var r = e.getBoundingClientRect();
-            return r.width >= innerWidth * 0.9 && r.height >= innerHeight * 0.9;
-          }
-          function pickByGeometry(el){
-            var c = el;
-            while (c && c !== document.body && c !== document.documentElement) {
-              var r = c.getBoundingClientRect();
-              if (r.width >= innerWidth * 0.8 && r.height >= innerHeight * 0.2 && small(c)) return c;
-              c = c.parentElement;
-            }
-            return null;
-          }
-          function pickByPosition(el){
-            var c = el, fixedBox = null, absBox = null;
-            while (c && c !== document.body && c !== document.documentElement && small(c)) {
-              var p = pos(c);
-              if (p === 'fixed') fixedBox = c; else if (p === 'absolute') absBox = c;
-              c = c.parentElement;
-            }
-            return fixedBox || absBox;
-          }
-          function pickBox(el){ return pickByGeometry(el) || pickByPosition(el); }
-
-          function killMasks(){
-            var els = document.body.querySelectorAll('*');
-            for (var i = 0; i < els.length; i++) {
-              var e = els[i], p = pos(e);
-              if ((p === 'fixed' || p === 'absolute') && (e.textContent || '').trim().length < 20 && covers(e)) {
-                var m = /rgba?\(([^)]*)\)/.exec(getComputedStyle(e).backgroundColor || '');
-                var a = 0;
-                if (m) { var parts = m[1].split(','); a = parts.length > 3 ? parseFloat(parts[3]) : 1; }
-                if (a > 0.05) e.remove();
-              }
-              else if (p === 'fixed' && covers(e) && e.children.length === 0 && (e.tagName === 'DIV' || e.tagName === 'SPAN') && !(e.textContent || '').trim()) {
-                e.remove();
-              }
-            }
-            document.documentElement.style.setProperty('overflow', 'auto', 'important');
-            document.body.style.setProperty('overflow', 'auto', 'important');
-          }
-
-          function killBoxes(){
-            var imgs = document.body.querySelectorAll('img'), seen = [], did = false;
-            for (var i = 0; i < imgs.length; i++) {
-              var c = imgs[i], fx = null, ab = null;
-              while (c && c !== document.body && c !== document.documentElement) {
-                var pp = pos(c);
-                if (pp === 'fixed') fx = c; else if (pp === 'absolute') ab = c;
-                c = c.parentElement;
-              }
-              fx = fx || ab;
-              if (!fx || seen.indexOf(fx) >= 0) continue;
-              seen.push(fx);
-              if ((fx.textContent || '').trim().length >= 30) continue;
-              var r = fx.getBoundingClientRect();
-              var boxLike = r.width >= innerWidth * 0.75 && r.height >= innerHeight * 0.15 && r.height <= innerHeight * 0.6;
-              if (boxLike || covers(fx)) { fx.remove(); did = true; }
-            }
-            return did;
-          }
-
-          function collect(root, topHost, out){
-            var els = root.querySelectorAll('*');
-            for (var i = 0; i < els.length; i++) {
-              var e = els[i], t = e.textContent;
-              if (t && t.length < 300 && (hasKey(t) || t.trim() === '允许')) {
-                var target = topHost || e;
-                if (out.indexOf(target) < 0) out.push(target);
-              }
-              if (e.shadowRoot) collect(e.shadowRoot, topHost || e, out);
-            }
-          }
-          function sweep(){
-            timer = null;
-            if (!document.body) return;
-            var hits = [], did = false;
-            collect(document.documentElement, null, hits);
-            hits.forEach(function(el){
-              if (!el.isConnected) return;
-              var box = pickBox(el);
-              if (box && box.isConnected) { box.remove(); did = true; }
-            });
-            if (killBoxes()) did = true;
-            if (did) { killMasks(); setTimeout(killMasks, 300); }
-          }
-          function schedule(){ if (!timer) timer = setTimeout(sweep, 400); }
-
           function unlock(){
             [document.documentElement, document.body].forEach(function(e){
               if (!e) return;
@@ -164,15 +63,12 @@ class MainActivity : Activity() {
               if (cs.touchAction === 'none') e.style.setProperty('touch-action', 'auto', 'important');
             });
           }
-          setInterval(unlock, 500);
-          var obs = null;
-          function startObs(){
-            if (obs || !document.documentElement) return;
-            obs = new MutationObserver(schedule);
-            obs.observe(document.documentElement, {childList: true, subtree: true});
+          function sweep(){
+            var els = document.querySelectorAll('.fc-ab-root, .fc-dialog-container, .fc-dialog-overlay, .fc-consent-root');
+            for (var i = 0; i < els.length; i++) els[i].remove();
+            unlock();
           }
-          startObs();
-          document.addEventListener('DOMContentLoaded', function(){ startObs(); schedule(); });
+          setInterval(sweep, 1000);
         })();
     """.trimIndent()
 
